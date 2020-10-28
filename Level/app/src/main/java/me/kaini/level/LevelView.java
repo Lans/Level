@@ -3,6 +3,7 @@ package me.kaini.level;
 import android.content.Context;
 import android.content.res.TypedArray;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.PointF;
 import android.os.Vibrator;
@@ -63,11 +64,23 @@ public class LevelView extends View {
      * 气泡颜色
      */
     private int mBubbleColor;
+    private Paint mBubbleBgPaint;
+    private Paint mBubbleRectPaint;
 
     private Paint mBubblePaint;
     private Paint mLimitPaint;
     private Paint mBubbleRulePaint;
-
+    /**
+     * 水平气泡
+     */
+    private Paint mHPaint;
+    /**
+     * 垂直气泡
+     */
+    private Paint mVPaint;
+    private int hColor;
+    private int vColor;
+    private int mBubbleWidth = 80;
     /**
      * 中心点坐标
      */
@@ -127,6 +140,7 @@ public class LevelView extends View {
         mBubblePaint.setStyle(Paint.Style.FILL);
         mBubblePaint.setAntiAlias(true);
 
+
         mLimitPaint = new Paint();
 
         mLimitPaint.setStyle(Paint.Style.STROKE);
@@ -140,6 +154,27 @@ public class LevelView extends View {
         mBubbleRulePaint.setStyle(Paint.Style.STROKE);
         mBubbleRulePaint.setStrokeWidth(mBubbleRuleWidth);
         mBubbleRulePaint.setAntiAlias(true);
+
+
+        mHPaint = new Paint();
+        mHPaint.setColor(hColor);
+        mHPaint.setStyle(Paint.Style.FILL);
+        mHPaint.setAntiAlias(true);
+
+        mVPaint = new Paint();
+        mVPaint.setColor(vColor);
+        mVPaint.setStyle(Paint.Style.FILL);
+        mVPaint.setAntiAlias(true);
+
+        mBubbleBgPaint = new Paint();
+        mBubbleBgPaint.setColor(Color.parseColor("#FF303030"));
+        mBubbleBgPaint.setStyle(Paint.Style.FILL);
+        mBubbleBgPaint.setAntiAlias(true);
+
+        mBubbleRectPaint = new Paint();
+        mBubbleRectPaint.setColor(Color.parseColor("#FF515151"));
+        mBubbleRectPaint.setStyle(Paint.Style.FILL);
+        mBubbleRectPaint.setAntiAlias(true);
 
         vibrator = (Vibrator) getContext().getSystemService(Context.VIBRATOR_SERVICE);
 
@@ -170,7 +205,8 @@ public class LevelView extends View {
         boolean isCenter = isCenter(bubblePoint);
         int limitCircleColor = isCenter ? mHorizontalColor : mLimitColor;
         int bubbleColor = isCenter ? mHorizontalColor : mBubbleColor;
-
+        int hBubbleColor = isHisCenter(bubblePoint) ? mHorizontalColor : mBubbleColor;
+        int vBubbleColor = isVisCenter(bubblePoint) ? mHorizontalColor : mBubbleColor;
         //水平时振动
         if (isCenter) {
             vibrator.vibrate(10);
@@ -178,13 +214,44 @@ public class LevelView extends View {
 
         mBubblePaint.setColor(bubbleColor);
         mLimitPaint.setColor(limitCircleColor);
+        mHPaint.setColor(hBubbleColor);
+        mVPaint.setColor(vBubbleColor);
 
         canvas.drawCircle(centerPnt.x, centerPnt.y, mBubbleRuleRadius, mBubbleRulePaint);
-        canvas.drawCircle(centerPnt.x, centerPnt.y, mLimitRadius, mLimitPaint);
+        canvas.drawCircle(centerPnt.x, centerPnt.y, mLimitRadius - mBubbleWidth, mLimitPaint);
 
         drawBubble(canvas);
+        if (bubblePoint != null) {
 
+            //top
+            canvas.drawRoundRect(mBubbleWidth, 0, getWidth() - mBubbleWidth, mBubbleWidth, getWidth() / 2, getWidth() / 2, mBubbleBgPaint);
+            canvas.drawRect(getWidth() / 2 - mBubbleWidth, 0, getWidth() / 2 + mBubbleWidth, mBubbleWidth, mBubbleRectPaint);
+            canvas.drawCircle(bubblePoint.x, mBubbleWidth / 2, mBubbleWidth / 2, mHPaint);
 
+            //left
+            canvas.drawRoundRect(0, mBubbleWidth, mBubbleWidth, getWidth() - mBubbleWidth, getWidth() / 2, getWidth() / 2, mBubbleBgPaint);
+            canvas.drawRect(0, getWidth() / 2 - mBubbleWidth, mBubbleWidth, getWidth() / 2 + mBubbleWidth, mBubbleRectPaint);
+            canvas.drawCircle(mBubbleWidth / 2, bubblePoint.y, mBubbleWidth / 2, mVPaint);
+        }
+
+    }
+
+    private boolean isHisCenter(PointF bubblePoint) {
+
+        if (bubblePoint == null) {
+            return false;
+        }
+
+        return Math.abs(bubblePoint.x - centerPnt.x) < 1;
+    }
+
+    private boolean isVisCenter(PointF bubblePoint) {
+
+        if (bubblePoint == null) {
+            return false;
+        }
+
+        return Math.abs(bubblePoint.y - centerPnt.y) < 1;
     }
 
     private boolean isCenter(PointF bubblePoint) {
@@ -294,4 +361,9 @@ public class LevelView extends View {
     }
 
 
+    @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+//        setAngle(90,90);
+    }
 }
