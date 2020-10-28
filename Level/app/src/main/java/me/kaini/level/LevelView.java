@@ -1,117 +1,297 @@
 package me.kaini.level;
 
-import android.hardware.Sensor;
-import android.hardware.SensorEvent;
-import android.hardware.SensorEventListener;
-import android.hardware.SensorManager;
-import android.os.Bundle;
-import android.support.v7.app.AppCompatActivity;
-import android.widget.TextView;
+import android.content.Context;
+import android.content.res.TypedArray;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.PointF;
+import android.os.Vibrator;
+import android.util.AttributeSet;
+import android.view.View;
+
+public class LevelView extends View {
 
 /**
  * @author chen.canney@gmail.com
+ * <p>
+ * 最大圈半径
+ * <p>
+ * 最大圈半径
  */
-public class MainActivity extends AppCompatActivity implements SensorEventListener {
+    /**
+     * 最大圈半径
+     */
+    private float mLimitRadius = 0;
 
-    private SensorManager sensorManager;
-    private Sensor acc_sensor;
-    private Sensor mag_sensor;
+    /**
+     * 气泡半径
+     */
+    private float mBubbleRadius;
 
-    private float[] accValues = new float[3];
-    private float[] magValues = new float[3];
-    // 旋转矩阵，用来保存磁场和加速度的数据
-    private float r[] = new float[9];
-    // 模拟方向传感器的数据（原始数据为弧度）
-    private float values[] = new float[3];
+    /**
+     * 最大限制圈颜色
+     */
+    private int mLimitColor;
 
-    private LevelView levelView;
-    private TextView tvHorz;
-    private TextView tvVert;
+    /**
+     * 限制圈宽度
+     */
+    private float mLimitCircleWidth;
 
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
 
-        levelView = (LevelView)findViewById(R.id.gv_hv);
+    /**
+     * 气泡中心标准圆颜色
+     */
+    private int mBubbleRuleColor;
 
-        tvVert = (TextView)findViewById(R.id.tvv_vertical);
-        tvHorz = (TextView)findViewById(R.id.tvv_horz);
+    /**
+     * 气泡中心标准圆宽
+     */
+    private float mBubbleRuleWidth;
 
-        sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
+    /**
+     * 气泡中心标准圆半径
+     */
+    private float mBubbleRuleRadius;
+
+    /**
+     * 水平后的颜色
+     */
+    private int mHorizontalColor;
+
+    /**
+     * 气泡颜色
+     */
+    private int mBubbleColor;
+
+    private Paint mBubblePaint;
+    private Paint mLimitPaint;
+    private Paint mBubbleRulePaint;
+
+    /**
+     * 中心点坐标
+     */
+    private PointF centerPnt = new PointF();
+
+    /**
+     * 计算后的气泡点
+     */
+    private PointF bubblePoint;
+    private double pitchAngle = -90;
+    private double rollAngle = -90;
+    private Vibrator vibrator;
+
+    public LevelView(Context context) {
+        super(context);
+        init(null, 0);
+    }
+
+    public LevelView(Context context, AttributeSet attrs) {
+        super(context, attrs);
+        init(attrs, 0);
+    }
+
+    public LevelView(Context context, AttributeSet attrs, int defStyle) {
+        super(context, attrs, defStyle);
+        init(attrs, defStyle);
+    }
+
+    private void init(AttributeSet attrs, int defStyle) {
+// Load attributes
+        final TypedArray a = getContext().obtainStyledAttributes(
+                attrs, R.styleable.LevelView, defStyle, 0);
+
+        mBubbleRuleColor = a.getColor(R.styleable.LevelView_bubbleRuleColor, mBubbleRuleColor);
+
+        mBubbleColor = a.getColor(R.styleable.LevelView_bubbleColor, mBubbleColor);
+        mLimitColor = a.getColor(R.styleable.LevelView_limitColor, mLimitColor);
+
+        mHorizontalColor = a.getColor(R.styleable.LevelView_horizontalColor, mHorizontalColor);
+
+
+        mLimitRadius = a.getDimension(R.styleable.LevelView_limitRadius, mLimitRadius);
+        mBubbleRadius = a.getDimension(R.styleable.LevelView_bubbleRadius, mBubbleRadius);
+        mLimitCircleWidth = a.getDimension(R.styleable.LevelView_limitCircleWidth, mLimitCircleWidth);
+
+        mBubbleRuleWidth = a.getDimension(R.styleable.LevelView_bubbleRuleWidth, mBubbleRuleWidth);
+
+        mBubbleRuleRadius = a.getDimension(R.styleable.LevelView_bubbleRuleRadius, mBubbleRuleRadius);
+
+
+        a.recycle();
+
+
+        mBubblePaint = new Paint();
+
+        mBubblePaint.setColor(mBubbleColor);
+        mBubblePaint.setStyle(Paint.Style.FILL);
+        mBubblePaint.setAntiAlias(true);
+
+        mLimitPaint = new Paint();
+
+        mLimitPaint.setStyle(Paint.Style.STROKE);
+        mLimitPaint.setColor(mLimitColor);
+        mLimitPaint.setStrokeWidth(mLimitCircleWidth);
+        //抗锯齿
+        mLimitPaint.setAntiAlias(true);
+
+        mBubbleRulePaint = new Paint();
+        mBubbleRulePaint.setColor(mBubbleRuleColor);
+        mBubbleRulePaint.setStyle(Paint.Style.STROKE);
+        mBubbleRulePaint.setStrokeWidth(mBubbleRuleWidth);
+        mBubbleRulePaint.setAntiAlias(true);
+
+        vibrator = (Vibrator) getContext().getSystemService(Context.VIBRATOR_SERVICE);
+
     }
 
     @Override
-    public void onResume() {
-        super.onResume();
+    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
 
-        acc_sensor = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-        mag_sensor = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
-        // 给传感器注册监听：
-        sensorManager.registerListener(this, acc_sensor, SensorManager.SENSOR_DELAY_NORMAL);
-        sensorManager.registerListener(this, mag_sensor, SensorManager.SENSOR_DELAY_NORMAL);
+        calculateCenter(widthMeasureSpec, heightMeasureSpec);
     }
 
-    @Override
-    protected void onPause() {
-        // 取消方向传感器的监听
-        sensorManager.unregisterListener(this);
-        super.onPause();
+    private void calculateCenter(int widthMeasureSpec, int heightMeasureSpec) {
+        int width = MeasureSpec.makeMeasureSpec(widthMeasureSpec, MeasureSpec.UNSPECIFIED);
+
+        int height = MeasureSpec.makeMeasureSpec(heightMeasureSpec, MeasureSpec.UNSPECIFIED);
+
+        int center = Math.min(width, height) / 2;
+
+        centerPnt.set(center, center);
     }
 
-    @Override
-    protected void onStop() {
-        // 取消方向传感器的监听
-        sensorManager.unregisterListener(this);
-        super.onStop();
-    }
 
     @Override
-    public void onAccuracyChanged(Sensor sensor, int accuracy) {
-    }
+    protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
 
-    @Override
-    public void onSensorChanged(SensorEvent event) {
-        // 获取手机触发event的传感器的类型
-        int sensorType = event.sensor.getType();
-        switch (sensorType) {
-            case Sensor.TYPE_ACCELEROMETER:
-                accValues = event.values.clone();
-                break;
-            case Sensor.TYPE_MAGNETIC_FIELD:
-                magValues = event.values.clone();
-                break;
+        boolean isCenter = isCenter(bubblePoint);
+        int limitCircleColor = isCenter ? mHorizontalColor : mLimitColor;
+        int bubbleColor = isCenter ? mHorizontalColor : mBubbleColor;
 
+        //水平时振动
+        if (isCenter) {
+            vibrator.vibrate(10);
         }
 
-        SensorManager.getRotationMatrix(r, null, accValues, magValues);
-        SensorManager.getOrientation(r, values);
+        mBubblePaint.setColor(bubbleColor);
+        mLimitPaint.setColor(limitCircleColor);
 
-        // 获取　沿着Z轴转过的角度
-        float azimuth = values[0];
+        canvas.drawCircle(centerPnt.x, centerPnt.y, mBubbleRuleRadius, mBubbleRulePaint);
+        canvas.drawCircle(centerPnt.x, centerPnt.y, mLimitRadius, mLimitPaint);
 
-        // 获取　沿着X轴倾斜时　与Y轴的夹角
-        float pitchAngle = values[1];
+        drawBubble(canvas);
 
-        // 获取　沿着Y轴的滚动时　与X轴的角度
-        //此处与官方文档描述不一致，所在加了符号（https://developer.android.google.cn/reference/android/hardware/SensorManager.html#getOrientation(float[], float[])）
-        float rollAngle = - values[2];
 
-        onAngleChanged(rollAngle, pitchAngle, azimuth);
+    }
 
+    private boolean isCenter(PointF bubblePoint) {
+
+        if (bubblePoint == null) {
+            return false;
+        }
+
+        return Math.abs(bubblePoint.x - centerPnt.x) < 1 && Math.abs(bubblePoint.y - centerPnt.y) < 1;
+    }
+
+    private void drawBubble(Canvas canvas) {
+        if (bubblePoint != null) {
+            canvas.drawCircle(bubblePoint.x, bubblePoint.y, mBubbleRadius, mBubblePaint);
+        }
     }
 
     /**
-     * 角度变更后显示到界面
-     * @param rollAngle
-     * @param pitchAngle
-     * @param azimuth
+     * Convert angle to screen coordinate point.
+     *
+     * @param rollAngle  横滚角(弧度)
+     * @param pitchAngle 俯仰角(弧度)
+     * @return
      */
-    private void onAngleChanged(float rollAngle, float pitchAngle, float azimuth){
+    private PointF convertCoordinate(double rollAngle, double pitchAngle, double radius) {
+        double scale = radius / Math.toRadians(90);
 
-        levelView.setAngle(rollAngle, pitchAngle);
+        //以圆心为原点，使用弧度表示坐标
+        double x0 = -(rollAngle * scale);
+        double y0 = -(pitchAngle * scale);
 
-        tvHorz.setText(String.valueOf((int)Math.toDegrees(rollAngle)) + "°");
-        tvVert.setText(String.valueOf((int)Math.toDegrees(pitchAngle)) + "°");
+        //使用屏幕坐标表示气泡点
+        double x = centerPnt.x - x0;
+        double y = centerPnt.y - y0;
+
+        return new PointF((float) x, (float) y);
     }
+
+    /**
+     * @param pitchAngle （弧度）
+     * @param rollAngle  (弧度)
+     */
+    public void setAngle(double rollAngle, double pitchAngle) {
+
+        this.pitchAngle = pitchAngle;
+        this.rollAngle = rollAngle;
+
+        //考虑气泡边界不超出限制圆，此处减去气泡的显示半径，做为最终的限制圆半径
+        float limitRadius = mLimitRadius - mBubbleRadius;
+
+        bubblePoint = convertCoordinate(rollAngle, pitchAngle, mLimitRadius);
+        outLimit(bubblePoint, limitRadius);
+
+        //坐标超出最大圆，取法向圆上的点
+        if (outLimit(bubblePoint, limitRadius)) {
+            onCirclePoint(bubblePoint, limitRadius);
+        }
+
+        invalidate();
+    }
+
+    /**
+     * 验证气泡点是否超过限制{@link #mLimitRadius}
+     *
+     * @param bubblePnt
+     * @return
+     */
+    private boolean outLimit(PointF bubblePnt, float limitRadius) {
+
+        float cSqrt = (bubblePnt.x - centerPnt.x) * (bubblePnt.x - centerPnt.x)
+                + (centerPnt.y - bubblePnt.y) * +(centerPnt.y - bubblePnt.y);
+
+
+        if (cSqrt - limitRadius * limitRadius > 0) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * 计算圆心到 bubblePnt点在圆上的交点坐标
+     * 即超出圆后的最大圆上坐标
+     *
+     * @param bubblePnt   气泡点
+     * @param limitRadius 限制圆的半径
+     * @return
+     */
+    private PointF onCirclePoint(PointF bubblePnt, double limitRadius) {
+        double azimuth = Math.atan2((bubblePnt.y - centerPnt.y), (bubblePnt.x - centerPnt.x));
+        azimuth = azimuth < 0 ? 2 * Math.PI + azimuth : azimuth;
+
+        //圆心+半径+角度 求圆上的坐标
+        double x1 = centerPnt.x + limitRadius * Math.cos(azimuth);
+        double y1 = centerPnt.y + limitRadius * Math.sin(azimuth);
+
+        bubblePnt.set((float) x1, (float) y1);
+
+        return bubblePnt;
+    }
+
+    public double getPitchAngle() {
+        return this.pitchAngle;
+    }
+
+    public double getRollAngle() {
+        return this.rollAngle;
+    }
+
+
 }
